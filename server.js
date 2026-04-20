@@ -10,10 +10,10 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-const publicDir = path.join(__dirname, 'Public');
+const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 app.get('/', (req, res) => {
-  const locs = [path.join(__dirname,'Public','index.html'), path.join(__dirname,'public','index.html'), path.join(__dirname,'index.html')];
+  const locs = [path.join(__dirname,'public','index.html'), path.join(__dirname,'index.html')];
   for (const l of locs) { if (fs.existsSync(l)) return res.sendFile(l); }
   res.send('Server running!');
 });
