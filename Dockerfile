@@ -20,4 +20,5 @@ COPY . .
 
 EXPOSE 3000
 
+RUN yt-dlp -U || true
 CMD ["npm", "start"]
