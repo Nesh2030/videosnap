@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VideoSnap — Download Without Watermark</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --surface2: #1c1c28;
+      --border: #2a2a3d;
+      --accent: #ff3c5f;
+      --accent2: #ff8c42;
+      --text: #f0f0f8;
+      --muted: #6b6b85;
+      --green: #22d68a;
+      --tiktok: #ff0050;
+      --youtube: #ff0000;
+      --facebook: #1877f2;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* Background grid + glow */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,60,95,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,60,95,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .glow {
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 700px;
+      height: 500px;
+      background: radial-gradient(ellipse, rgba(255,60,95,0.15) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* NAV */
+    nav {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px 40px;
+    }
+
+    .logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2rem;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    /* HERO */
+    .hero {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      padding: 60px 20px 40px;
+      max-width: 700px;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .hero-eyebrow span { width: 30px; height: 1px; background: var(--accent); display: inline-block; }
+
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3.5rem, 8vw, 6rem);
+      line-height: 0.95;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+    }
+
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 40px;
+    }
+
+    /* PLATFORM BADGES */
+    .platforms {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 50px;
+    }
+
+    .platform-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 16px;
+      border-radius: 30px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+    }
+
+    .platform-badge.tiktok { border-color: rgba(255,0,80,0.3); }
+    .platform-badge.youtube { border-color: rgba(255,0,0,0.3); }
+    .platform-badge.facebook { border-color: rgba(24,119,242,0.3); }
+    .platform-badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .platform-badge.tiktok .dot { background: var(--tiktok); }
+    .platform-badge.youtube .dot { background: var(--youtube); }
+    .platform-badge.facebook .dot { background: var(--facebook); }
+
+    /* MAIN CARD */
+    .card {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 680px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      margin-bottom: 60px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .url-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .url-input-wrap input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      padding: 16px 50px 16px 18px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .url-input-wrap input:focus {
+      border-color: var(--accent);
+    }
+
+    .url-input-wrap input::placeholder {
+      color: var(--muted);
+    }
+
+    .clear-btn {
+      position: absolute;
+      right: 14px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      display: none;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+    .clear-btn:hover { color: var(--text); }
+
+    /* Platform indicator inside input */
+    .platform-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 8px;
+      padding-left: 4px;
+    }
+    .platform-indicator .pi-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .platform-indicator.show { display: flex; }
+
+    /* Quality selector */
+    .quality-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .quality-row label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+      width: 100%;
+    }
+
+    .quality-options {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .q-btn {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .q-btn.active {
+      background: rgba(255,60,95,0.1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Fetch info button */
+    .fetch-btn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 16px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: opacity 0.2s, transform 0.1s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .fetch-btn:hover { opacity: 0.92; }
+    .fetch-btn:active { transform: scale(0.99); }
+    .fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Video preview */
+    #preview {
+      display: none;
+      margin-top: 28px;
+      padding-top: 28px;
+      border-top: 1px solid var(--border);
+      animation: fadeUp 0.4s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .preview-inner {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+
+    .thumb-wrap {
+      flex-shrink: 0;
+      width: 110px;
+      height: 75px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .thumb-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+    }
+
+    .video-meta { flex: 1; min-width: 0; }
+
+    .video-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1.4;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .video-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 10px 18px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: 0.3px;
+    }
+    .download-btn:hover { opacity: 0.88; }
+    .download-btn:active { transform: scale(0.98); }
+    .download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Progress bar */
+    #progress-wrap {
+      display: none;
+      margin-top: 16px;
+    }
+
+    .progress-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .progress-bar-outer {
+      background: var(--surface2);
+      border-radius: 20px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .progress-bar-inner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 20px;
+      transition: width 0.3s ease;
+      animation: pulse-bar 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-bar {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    /* Error/success messages */
+    .msg {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      display: none;
+    }
+
+    .msg.error {
+      background: rgba(255,60,95,0.1);
+      border: 1px solid rgba(255,60,95,0.3);
+      color: #ff7a90;
+    }
+
+    .msg.success {
+      background: rgba(34,214,138,0.1);
+      border: 1px solid rgba(34,214,138,0.3);
+      color: var(--green);
+    }
+
+    /* HOW IT WORKS */
+    .how {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 680px;
+      margin-bottom: 80px;
+      padding: 0 20px;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+
+    .step:hover { border-color: rgba(255,60,95,0.4); }
+
+    .step-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      margin-bottom: 10px;
+    }
+
+    .step h3 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .step p {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    footer {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      padding: 30px 20px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      width: 100%;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+
+    @media (max-width: 600px) {
+      nav { padding: 20px; }
+      .card { padding: 24px 20px; margin: 0 16px 40px; }
+      .steps { grid-template-columns: 1fr; }
+      .preview-inner { flex-direction: column; }
+      .thumb-wrap { width: 100%; height: 160px; }
+      h1 { font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+
+  <nav>
+    <div class="logo">VideoSnap</div>
+    <div class="badge">No Watermark</div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-eyebrow"><span></span> Free Video Downloader <span></span></div>
+    <h1>Download <em>Any</em> Video Clean</h1>
+    <p>Paste a link from TikTok, YouTube, or Facebook.<br/>Get your video — no watermarks, no sign-up, no nonsense.</p>
+
+    <div class="platforms">
+      <div class="platform-badge tiktok"><div class="dot"></div> TikTok</div>
+      <div class="platform-badge youtube"><div class="dot"></div> YouTube</div>
+      <div class="platform-badge facebook"><div class="dot"></div> Facebook</div>
+    </div>
+  </section>
+
+  <div class="card">
+    <div class="input-group">
+      <label>Paste your video link</label>
+      <div class="url-input-wrap">
+        <input type="url" id="urlInput" placeholder="https://www.tiktok.com/@user/video/..." autocomplete="off" />
+        <button class="clear-btn" id="clearBtn" title="Clear">✕</button>
+      </div>
+      <div class="platform-indicator" id="platformIndicator">
+        <div class="pi-dot" id="piDot"></div>
+        <span id="piText"></span>
+      </div>
+    </div>
+
+    <div class="quality-row">
+      <label>Quality</label>
+      <div class="quality-options">
+        <button class="q-btn active" data-q="best">Best</button>
+        <button class="q-btn" data-q="720">720p</button>
+        <button class="q-btn" data-q="480">480p</button>
+      </div>
+    </div>
+
+    <button class="fetch-btn" id="fetchBtn">Get Video Info</button>
+
+    <div class="msg" id="errorMsg"></div>
+
+    <div id="preview">
+      <div class="preview-inner">
+        <div class="thumb-wrap" id="thumbWrap">
+          <div class="thumb-placeholder">🎬</div>
+        </div>
+        <div class="video-meta">
+          <div class="video-title" id="videoTitle">—</div>
+          <div class="video-sub" id="videoSub">—</div>
+          <button class="download-btn" id="downloadBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-7 2v2h14v-2H5z"/></svg>
+            Download MP4
+          </button>
+        </div>
+      </div>
+      <div id="progress-wrap">
+        <div class="progress-label" id="progressLabel">Downloading…</div>
+        <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div></div>
+      </div>
+      <div class="msg success" id="successMsg">✓ Download started! Check your downloads folder.</div>
+    </div>
+  </div>
+
+  <div class="how">
+    <div class="section-label">How It Works</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h3>Copy the Link</h3>
+        <p>Share or copy the video URL from TikTok, YouTube, or Facebook.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h3>Paste & Fetch</h3>
+        <p>Paste it here and hit "Get Video Info" to preview the video.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h3>Download Free</h3>
+        <p>Click Download and get your clean MP4 — no watermark, no account.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    VideoSnap — for personal use only. Respect creators' rights. &nbsp;|&nbsp;
+    Powered by <a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt-dlp</a>
+  </footer>
+
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const preview = document.getElementById('preview');
+    const errorMsg = document.getElementById('errorMsg');
+    const successMsg = document.getElementById('successMsg');
+    const platformIndicator = document.getElementById('platformIndicator');
+    const piDot = document.getElementById('piDot');
+    const piText = document.getElementById('piText');
+    const progressWrap = document.getElementById('progress-wrap');
+    const progressBar = document.getElementById('progressBar');
+    const progressLabel = document.getElementById('progressLabel');
+
+    let selectedQuality = 'best';
+    let currentUrl = '';
+
+    // Quality buttons
+    document.querySelectorAll('.q-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedQuality = btn.dataset.q;
+      });
+    });
+
+    // Detect platform from URL
+    function detectPlatform(url) {
+      if (/tiktok\.com/i.test(url)) return { name: 'TikTok', color: '#ff0050' };
+      if (/youtube\.com|youtu\.be/i.test(url)) return { name: 'YouTube', color: '#ff0000' };
+      if (/facebook\.com|fb\.watch/i.test(url)) return { name: 'Facebook', color: '#1877f2' };
+      return null;
+    }
+
+    // Input events
+    urlInput.addEventListener('input', () => {
+      const val = urlInput.value.trim();
+      clearBtn.style.display = val ? 'block' : 'none';
+      const p = detectPlatform(val);
+      if (p && val.length > 10) {
+        platformIndicator.classList.add('show');
+        piDot.style.background = p.color;
+        piText.textContent = p.name + ' link detected';
+        piText.style.color = p.color;
+      } else {
+        platformIndicator.classList.remove('show');
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      urlInput.value = '';
+      clearBtn.style.display = 'none';
+      platformIndicator.classList.remove('show');
+      preview.style.display = 'none';
+      hideMsg();
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = '⚠ ' + msg;
+      errorMsg.className = 'msg error';
+      errorMsg.style.display = 'block';
+    }
+
+    function hideMsg() {
+      errorMsg.style.display = 'none';
+      successMsg.style.display = 'none';
+    }
+
+    function setLoading(btn, loading, text) {
+      btn.disabled = loading;
+      btn.innerHTML = loading
+        ? `<span class="spinner"></span>${text}`
+        : text;
+    }
+
+    // Fetch video info
+    fetchBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) { showError('Please paste a video URL first.'); return; }
+      hideMsg();
+      preview.style.display = 'none';
+      setLoading(fetchBtn, true, 'Fetching info…');
+
+      try {
+        const res = await fetch('/api/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'Something went wrong.'); return; }
+
+        currentUrl = url;
+        document.getElementById('videoTitle').textContent = data.title;
+        const dur = data.duration ? formatDuration(data.duration) : '';
+        document.getElementById('videoSub').textContent =
+          [data.uploader, data.platform?.toUpperCase(), dur].filter(Boolean).
