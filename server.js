@@ -17,6 +17,7 @@ app.get('/', (req, res) => {
   for (const l of locs) { if (fs.existsSync(l)) return res.sendFile(l); }
   res.send('Server running!');
 });
+
 // Detect supported platform
 function detectPlatform(url) {
   if (/tiktok\.com/i.test(url)) return 'tiktok';
@@ -24,6 +25,8 @@ function detectPlatform(url) {
   if (/facebook\.com|fb\.watch/i.test(url)) return 'facebook';
   return null;
 }
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // Get video info (title + thumbnail)
 app.post('/api/info', async (req, res) => {
@@ -33,12 +36,11 @@ app.post('/api/info', async (req, res) => {
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: 'Unsupported platform. Use TikTok, YouTube, or Facebook.' });
 
-  // Use yt-dlp to get JSON metadata
-  const cmd = `yt-dlp --dump-json --no-playlist "${url}"`;
+  const cmd = `yt-dlp --dump-json --no-playlist --user-agent "${UA}" "${url}"`;
 
   exec(cmd, { timeout: 30000 }, (err, stdout, stderr) => {
     if (err) {
-      console.error(stderr);
+      console.error('[INFO ERROR]', stderr);
       return res.status(500).json({ error: 'Could not fetch video info. The link may be private or unsupported.' });
     }
     try {
@@ -66,12 +68,8 @@ app.post('/api/download', (req, res) => {
 
   const tmpFile = path.join(os.tmpdir(), `videosnap_${Date.now()}.mp4`);
 
-  // Build yt-dlp command
-  // For TikTok: use format that avoids watermark
-  // For YouTube/Facebook: best mp4 quality
   let formatArg = '-f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"';
   if (platform === 'tiktok') {
-    // TikTok: download without watermark using no_watermark format if available
     formatArg = '-f "no_watermark/bestvideo+bestaudio/best"';
   }
   if (quality === '720') {
@@ -80,11 +78,11 @@ app.post('/api/download', (req, res) => {
     formatArg = '-f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]"';
   }
 
-  const cmd = `yt-dlp ${formatArg} --merge-output-format mp4 -o "${tmpFile}" "${url}"`;
+  const cmd = `yt-dlp ${formatArg} --merge-output-format mp4 --user-agent "${UA}" -o "${tmpFile}" "${url}"`;
 
   exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
     if (err) {
-      console.error(stderr);
+      console.error('[DOWNLOAD ERROR]', stderr);
       if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
       return res.status(500).json({ error: 'Download failed. The video may be private, age-restricted, or unavailable.' });
     }
