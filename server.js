@@ -10,8 +10,13 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
+const publicDir = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : path.join(__dirname, 'Public');
+app.use(express.static(publicDir));
+app.get('/', (req, res) => {
+  const locs = [path.join(__dirname,'public','index.html'), path.join(__dirname,'Public','index.html'), path.join(__dirname,'index.html')];
+  for (const l of locs) { if (fs.existsSync(l)) return res.sendFile(l); }
+  res.send('Server running!');
+});
 // Detect supported platform
 function detectPlatform(url) {
   if (/tiktok\.com/i.test(url)) return 'tiktok';
