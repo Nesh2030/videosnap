@@ -658,7 +658,6 @@
     let selectedQuality = 'best';
     let currentUrl = '';
 
-    // Quality buttons
     document.querySelectorAll('.q-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
@@ -667,7 +666,6 @@
       });
     });
 
-    // Detect platform from URL
     function detectPlatform(url) {
       if (/tiktok\.com/i.test(url)) return { name: 'TikTok', color: '#ff0050' };
       if (/youtube\.com|youtu\.be/i.test(url)) return { name: 'YouTube', color: '#ff0000' };
@@ -675,7 +673,6 @@
       return null;
     }
 
-    // Input events
     urlInput.addEventListener('input', () => {
       const val = urlInput.value.trim();
       clearBtn.style.display = val ? 'block' : 'none';
@@ -711,19 +708,15 @@
 
     function setLoading(btn, loading, text) {
       btn.disabled = loading;
-      btn.innerHTML = loading
-        ? `<span class="spinner"></span>${text}`
-        : text;
+      btn.innerHTML = loading ? `<span class="spinner"></span>${text}` : text;
     }
 
-    // Fetch video info
     fetchBtn.addEventListener('click', async () => {
       const url = urlInput.value.trim();
       if (!url) { showError('Please paste a video URL first.'); return; }
       hideMsg();
       preview.style.display = 'none';
       setLoading(fetchBtn, true, 'Fetching info…');
-
       try {
         const res = await fetch('/api/info', {
           method: 'POST',
@@ -732,9 +725,88 @@
         });
         const data = await res.json();
         if (!res.ok) { showError(data.error || 'Something went wrong.'); return; }
-
         currentUrl = url;
         document.getElementById('videoTitle').textContent = data.title;
+        const dur = data.duration ? formatDuration(data.duration) : '';
+        document.getElementById('videoSub').textContent =
+          [data.uploader, data.platform?.toUpperCase(), dur].filter(Boolean).join(' · ');
+        const thumbWrap = document.getElementById('thumbWrap');
+        if (data.thumbnail) {
+          thumbWrap.innerHTML = `<img src="${data.thumbnail}" alt="thumbnail" crossorigin="anonymous" onerror="this.parentElement.innerHTML='<div class=thumb-placeholder>🎬</div>'"/>`;
+        } else {
+          thumbWrap.innerHTML = '<div class="thumb-placeholder">🎬</div>';
+        }
+        preview.style.display = 'block';
+        successMsg.style.display = 'none';
+        progressWrap.style.display = 'none';
+      } catch (e) {
+        showError('Network error. Please try again.');
+      } finally {
+        setLoading(fetchBtn, false, 'Get Video Info');
+      }
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+      if (!currentUrl) return;
+      hideMsg();
+      setLoading(downloadBtn, true, 'Preparing…');
+      progressWrap.style.display = 'block';
+      progressBar.style.width = '0%';
+      let fake = 0;
+      const interval = setInterval(() => {
+        fake = Math.min(fake + Math.random() * 8, 88);
+        progressBar.style.width = fake + '%';
+        progressLabel.textContent = fake < 30 ? 'Fetching video…' : fake < 70 ? 'Downloading…' : 'Finalizing…';
+      }, 400);
+      try {
+        const res = await fetch('/api/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: currentUrl, quality: selectedQuality })
+        });
+        clearInterval(interval);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          progressWrap.style.display = 'none';
+          showError(data.error || 'Download failed.');
+          return;
+        }
+        progressBar.style.width = '100%';
+        progressLabel.textContent = 'Complete!';
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'videosnap_download.mp4';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        setTimeout(() => {
+          progressWrap.style.display = 'none';
+          successMsg.style.display = 'block';
+        }, 600);
+      } catch (e) {
+        clearInterval(interval);
+        progressWrap.style.display = 'none';
+        showError('Network error. Please try again.');
+      } finally {
+        setLoading(downloadBtn, false, '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-7 2v2h14v-2H5z"/></svg> Download MP4');
+      }
+    });
+
+    function formatDuration(secs) {
+      if (!secs) return '';
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    urlInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') fetchBtn.click();
+    });
+  </script>
+</body>
+</html>
         const dur = data.duration ? formatDuration(data.duration) : '';
         document.getElementById('videoSub').textContent =
           [data.uploader, data.platform?.toUpperCase(), dur].filter(Boolean).
