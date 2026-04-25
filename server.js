@@ -88,10 +88,14 @@ app.post('/api/download', (req, res) => {
   if (!platform) return res.status(400).json({ error: 'Unsupported platform.' });
 
   const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp4`);
+
   let fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
   if (platform === 'tiktok') fmt = 'bestvideo+bestaudio/best';
-  if (quality === '720') fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]';
-  if (quality === '480') fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]';
+  if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]';
+  if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]';
+  if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]';
+  if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]';
+  if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240]';
 
   const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
   console.log('Download:', cmd);
