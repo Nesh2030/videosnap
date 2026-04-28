@@ -89,13 +89,23 @@ app.post('/api/download', (req, res) => {
 
   const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp4`);
 
-  let fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
-  if (platform === 'tiktok') fmt = 'bestvideo+bestaudio/best';
-  if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]';
-  if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]';
-  if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]';
-  if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]';
-  if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240]';
+  // Facebook & TikTok don't reliably provide split streams — use combined format
+  const isCombinedOnly = platform === 'facebook' || platform === 'tiktok';
+
+  let fmt;
+  if (isCombinedOnly) {
+    const h = ['1080','720','480','360','240'].includes(quality) ? quality : null;
+    fmt = h
+      ? `best[height<=${h}][ext=mp4]/best[height<=${h}]/best[ext=mp4]/best`
+      : `best[ext=mp4]/best`;
+  } else {
+    fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+    if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
+    if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
+    if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
+    if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
+    if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240][ext=mp4]/best[height<=240]';
+  }
 
   const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
   console.log('Download:', cmd);
