@@ -157,7 +157,7 @@ app.post('/api/download', downloadLimiter, (req, res) => {
       if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
       if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240][ext=mp4]/best[height<=240]';
     }
-    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
   }
 
   console.log('Download:', cmd);
