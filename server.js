@@ -79,6 +79,18 @@ function validateUrl(url) {
   }
 }
 
+function cleanUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (/youtube\.com|youtu\.be/i.test(parsed.hostname)) {
+      parsed.searchParams.delete('list');
+      parsed.searchParams.delete('index');
+      parsed.searchParams.delete('start_radio');
+    }
+    return parsed.toString();
+  } catch { return url; }
+}
+
 function detectPlatform(url) {
   if (/tiktok\.com/i.test(url)) return 'tiktok';
   if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
@@ -89,9 +101,10 @@ function detectPlatform(url) {
 
 // ─── /api/info ────────────────────────────────────────────────────────────────
 app.post('/api/info', infoLimiter, (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'No URL provided.' });
-  if (!validateUrl(url)) return res.status(400).json({ error: 'Invalid URL format.' });
+  const { url: _url } = req.body;
+  if (!_url) return res.status(400).json({ error: 'No URL provided.' });
+  if (!validateUrl(_url)) return res.status(400).json({ error: 'Invalid URL format.' });
+  const url = cleanUrl(_url);
 
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: 'Unsupported platform. Supported: TikTok, YouTube, Facebook, Instagram.' });
@@ -126,9 +139,10 @@ app.post('/api/info', infoLimiter, (req, res) => {
 
 // ─── /api/download ────────────────────────────────────────────────────────────
 app.post('/api/download', downloadLimiter, (req, res) => {
-  const { url, quality, format } = req.body;
-  if (!url) return res.status(400).json({ error: 'No URL provided.' });
-  if (!validateUrl(url)) return res.status(400).json({ error: 'Invalid URL format.' });
+  const { url: _url2, quality, format } = req.body;
+  if (!_url2) return res.status(400).json({ error: 'No URL provided.' });
+  if (!validateUrl(_url2)) return res.status(400).json({ error: 'Invalid URL format.' });
+  const url = cleanUrl(_url2);
 
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: 'Unsupported platform.' });
@@ -157,7 +171,7 @@ app.post('/api/download', downloadLimiter, (req, res) => {
       if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
       if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240][ext=mp4]/best[height<=240]';
     }
-    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
   }
 
   console.log('Download:', cmd);
