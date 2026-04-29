@@ -209,18 +209,31 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
         fs.createReadStream(actual).pipe(res).on('finish', () => fs.unlink(actual, () => {}));
       });
     } else {
-      // Video: proxy stream from Invidious
-      try {
-        const streamUrl = await getInvidiousStream(videoId, quality);
+      // Video: use yt-dlp with multiple client fallbacks
+      const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp4`);
+      let fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+      if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
+      if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
+      if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
+      if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
+      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
+      const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+      exec(cmd, { timeout: 180000 }, (err) => {
+        if (err) {
+          if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+          return res.status(500).json({ error: 'YouTube video download failed. The video may be restricted or unavailable.' });
+        }
+        const actual = fs.existsSync(tmpFile) ? tmpFile : null;
+        if (!actual) return res.status(500).json({ error: 'File not found after download.' });
+        const stat = fs.statSync(actual);
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Content-Disposition', 'attachment; filename="videosnap.mp4"');
-        https.get(streamUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 60000 }, (streamRes) => {
-          if (streamRes.headers['content-length']) res.setHeader('Content-Length', streamRes.headers['content-length']);
-          streamRes.pipe(res);
-        }).on('error', () => res.status(500).json({ error: 'Stream failed. Please try again.' }));
-      } catch (e) {
-        return res.status(500).json({ error: 'YouTube download unavailable right now. Try again in a moment.' });
-      }
+        res.setHeader('Content-Length', stat.size);
+        const stream = fs.createReadStream(actual);
+        stream.pipe(res);
+        stream.on('finish', () => fs.unlink(actual, () => {}));
+        stream.on('error', () => { if (fs.existsSync(actual)) fs.unlinkSync(actual); res.status(500).end(); });
+      });
     }
     return;
   }
