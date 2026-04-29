@@ -67,29 +67,11 @@ function cleanUrl(url) {
 }
 
 function detectPlatform(url) {
-  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
   if (/tiktok\.com/i.test(url)) return 'tiktok';
+  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
   if (/facebook\.com|fb\.watch/i.test(url)) return 'facebook';
   if (/instagram\.com/i.test(url)) return 'instagram';
-  if (/twitter\.com|x\.com/i.test(url)) return 'twitter';
-  if (/vimeo\.com/i.test(url)) return 'vimeo';
-  if (/dailymotion\.com/i.test(url)) return 'dailymotion';
-  if (/twitch\.tv/i.test(url)) return 'twitch';
-  if (/soundcloud\.com/i.test(url)) return 'soundcloud';
-  if (/reddit\.com|redd\.it/i.test(url)) return 'reddit';
-  if (/pinterest\.com|pin\.it/i.test(url)) return 'pinterest';
-  if (/linkedin\.com/i.test(url)) return 'linkedin';
-  if (/snapchat\.com/i.test(url)) return 'snapchat';
-  if (/rumble\.com/i.test(url)) return 'rumble';
-  if (/bilibili\.com/i.test(url)) return 'bilibili';
-  if (/ok\.ru/i.test(url)) return 'ok';
-  if (/vk\.com/i.test(url)) return 'vk';
-  if (/streamable\.com/i.test(url)) return 'streamable';
-  if (/ted\.com/i.test(url)) return 'ted';
-  if (/imdb\.com/i.test(url)) return 'imdb';
-  if (/mixcloud\.com/i.test(url)) return 'mixcloud';
-  if (/bandcamp\.com/i.test(url)) return 'bandcamp';
-  return 'generic'; // let yt-dlp try anything else
+  return null;
 }
 
 function getVideoId(url) {
@@ -113,7 +95,7 @@ function httpsGet(url, timeoutMs = 10000) {
   });
 }
 
-// ─── YouTube info via oEmbed ──────────────────────────────────────────────────
+// ─── YouTube info via oEmbed (always free, no bot check) ─────────────────────
 async function getYouTubeInfo(videoId) {
   const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
   const raw = await httpsGet(oEmbedUrl);
@@ -126,6 +108,35 @@ async function getYouTubeInfo(videoId) {
   };
 }
 
+// ─── YouTube stream via Invidious (multiple fallbacks) ────────────────────────
+const INVIDIOUS = [
+  'https://inv.nadeko.net',
+  'https://invidious.privacyredirect.com',
+  'https://iv.datura.network',
+  'https://invidious.lunar.icu',
+  'https://invidious.nerdvpn.de',
+  'https://vid.puffyan.us',
+];
+
+async function getInvidiousStream(videoId, quality) {
+  for (const base of INVIDIOUS) {
+    try {
+      const raw = await httpsGet(`${base}/api/v1/videos/${videoId}`, 8000);
+      const json = JSON.parse(raw);
+      if (json.error || !json.formatStreams?.length) continue;
+
+      const streams = json.formatStreams;
+      let picked = null;
+      if (quality && quality !== 'best') {
+        picked = streams.find(s => s.qualityLabel?.startsWith(quality));
+      }
+      if (!picked) picked = streams[0];
+      if (picked?.url) return picked.url;
+    } catch { continue; }
+  }
+  throw new Error('No Invidious instance available');
+}
+
 // ─── /api/info ────────────────────────────────────────────────────────────────
 app.post('/api/info', infoLimiter, async (req, res) => {
   const { url: _url } = req.body;
@@ -133,6 +144,7 @@ app.post('/api/info', infoLimiter, async (req, res) => {
   if (!validateUrl(_url)) return res.status(400).json({ error: 'Invalid URL format.' });
   const url = cleanUrl(_url);
   const platform = detectPlatform(url);
+  if (!platform) return res.status(400).json({ error: 'Unsupported platform. Supported: TikTok, YouTube, Facebook, Instagram.' });
 
   if (platform === 'youtube') {
     const videoId = getVideoId(url);
@@ -145,14 +157,12 @@ app.post('/api/info', infoLimiter, async (req, res) => {
     }
   }
 
-  // All other platforms via yt-dlp
-  const COOKIES = fs.existsSync('/app/cookies.txt') ? '--cookies /app/cookies.txt' : '';
-  const cmd = `${YTDLP} --dump-json --no-playlist --no-warnings --socket-timeout 15 ${COOKIES} "${url}"`;
+  // Other platforms
+  const cmd = `${YTDLP} --dump-json --no-playlist --no-warnings --socket-timeout 15 "${url}"`;
   exec(cmd, { timeout: 45000 }, (err, stdout, stderr) => {
     if (err) {
       if (/private/i.test(stderr)) return res.status(500).json({ error: 'This video is private.' });
       if (/unavailable|removed/i.test(stderr)) return res.status(500).json({ error: 'This video has been removed.' });
-      if (/unsupported url/i.test(stderr)) return res.status(400).json({ error: 'This site is not supported.' });
       return res.status(500).json({ error: 'Could not fetch video info.' });
     }
     try {
@@ -175,24 +185,22 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
   if (!validateUrl(_url2)) return res.status(400).json({ error: 'Invalid URL format.' });
   const url = cleanUrl(_url2);
   const platform = detectPlatform(url);
+  if (!platform) return res.status(400).json({ error: 'Unsupported platform.' });
 
   const isAudio = format === 'mp3';
-  const COOKIES = fs.existsSync('/app/cookies.txt') ? '--cookies /app/cookies.txt' : '';
 
   if (platform === 'youtube') {
     const videoId = getVideoId(url);
     if (!videoId) return res.status(400).json({ error: 'Could not read YouTube video ID.' });
 
     if (isAudio) {
-      const tmpBase = path.join(os.tmpdir(), `vs_${Date.now()}`);
+      // Audio: use yt-dlp with tv_embedded (less restricted for audio)
+      const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
       const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
-      const cmd = `${YTDLP} -f bestaudio/best --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${COOKIES} ${ytArgs} -o "${tmpBase}.%(ext)s" "${url}"`;
+      const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
       exec(cmd, { timeout: 180000 }, (err) => {
         if (err) return res.status(500).json({ error: 'Audio download failed. Try MP4 instead.' });
-        const actual = fs.existsSync(`${tmpBase}.mp3`) ? `${tmpBase}.mp3`
-          : fs.existsSync(`${tmpBase}.m4a`) ? `${tmpBase}.m4a`
-          : fs.existsSync(`${tmpBase}.webm`) ? `${tmpBase}.webm`
-          : null;
+        const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
         if (!actual) return res.status(500).json({ error: 'File not found after download.' });
         const stat = fs.statSync(actual);
         res.setHeader('Content-Type', 'audio/mpeg');
@@ -201,67 +209,70 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
         fs.createReadStream(actual).pipe(res).on('finish', () => fs.unlink(actual, () => {}));
       });
     } else {
+      // Video: use yt-dlp with cookies.txt
       const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp4`);
+      const cookiesPath = path.join(__dirname, 'cookies.txt');
+      const cookiesArg = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+      const ytArgs = `--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates ${cookiesArg}`;
       let fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
       if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
       if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
       if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
       if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
-      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
-      const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${COOKIES} ${ytArgs} -o "${tmpFile}" "${url}"`;
-      exec(cmd, { timeout: 180000 }, (err) => {
+      if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240][ext=mp4]/best[height<=240]';
+      const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+      console.log('YT Download:', cmd);
+      exec(cmd, { timeout: 180000 }, (err, stdout, stderr) => {
         if (err) {
           if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
-          return res.status(500).json({ error: 'YouTube video download failed. The video may be restricted or unavailable.' });
+          console.error('YT download error:', stderr);
+          return res.status(500).json({ error: 'YouTube download failed. The video may be restricted.' });
         }
-        const actual = fs.existsSync(tmpFile) ? tmpFile : null;
-        if (!actual) return res.status(500).json({ error: 'File not found after download.' });
-        const stat = fs.statSync(actual);
+        if (!fs.existsSync(tmpFile)) return res.status(500).json({ error: 'File not found after download.' });
+        const stat = fs.statSync(tmpFile);
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Content-Disposition', 'attachment; filename="videosnap.mp4"');
         res.setHeader('Content-Length', stat.size);
-        const stream = fs.createReadStream(actual);
+        const stream = fs.createReadStream(tmpFile);
         stream.pipe(res);
-        stream.on('finish', () => fs.unlink(actual, () => {}));
-        stream.on('error', () => { if (fs.existsSync(actual)) fs.unlinkSync(actual); res.status(500).end(); });
+        stream.on('end', () => fs.unlink(tmpFile, () => {}));
+        stream.on('error', () => { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); res.status(500).end(); });
       });
     }
     return;
   }
 
-  // All other platforms: yt-dlp
+  // Other platforms: yt-dlp
   const ext = isAudio ? 'mp3' : 'mp4';
-  const tmpBase = path.join(os.tmpdir(), `vs_${Date.now()}`);
-  const tmpFile = `${tmpBase}.${ext}`;
+  const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.${ext}`);
   let cmd;
-
   if (isAudio) {
-    cmd = `${YTDLP} -f bestaudio/best --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${COOKIES} -o "${tmpBase}.%(ext)s" "${url}"`;
+    cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
   } else {
-    const isCombined = ['facebook','tiktok','instagram','twitter','reddit','pinterest','linkedin','snapchat','rumble','bilibili','ok','vk','streamable','ted','mixcloud','bandcamp','generic'].includes(platform);
+    const isCombined = platform === 'facebook' || platform === 'tiktok' || platform === 'instagram';
     let fmt;
     if (isCombined) {
       const h = ['1080','720','480','360','240'].includes(quality) ? quality : null;
       fmt = h ? `best[height<=${h}][ext=mp4]/best[height<=${h}]/best[ext=mp4]/best` : `best[ext=mp4]/best`;
     } else {
       fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+      if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
+      if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
+      if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
+      if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
+      if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240][ext=mp4]/best[height<=240]';
     }
-    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${COOKIES} -o "${tmpFile}" "${url}"`;
+    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
   }
 
   exec(cmd, { timeout: 180000 }, (err, stdout, stderr) => {
     if (err) {
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
       if (/private/i.test(stderr)) return res.status(500).json({ error: 'This video is private.' });
       if (/unavailable|removed/i.test(stderr)) return res.status(500).json({ error: 'This video has been removed.' });
-      if (/unsupported url/i.test(stderr)) return res.status(400).json({ error: 'This site is not supported.' });
       return res.status(500).json({ error: 'Download failed. The video may be private or unavailable.' });
     }
-    const actual = isAudio
-      ? (fs.existsSync(`${tmpBase}.mp3`) ? `${tmpBase}.mp3`
-        : fs.existsSync(`${tmpBase}.m4a`) ? `${tmpBase}.m4a`
-        : fs.existsSync(`${tmpBase}.webm`) ? `${tmpBase}.webm`
-        : null)
-      : (fs.existsSync(tmpFile) ? tmpFile : null);
+    const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
     if (!actual) return res.status(500).json({ error: 'File not found after download.' });
     const stat = fs.statSync(actual);
     res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
@@ -269,7 +280,7 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
     res.setHeader('Content-Length', stat.size);
     const stream = fs.createReadStream(actual);
     stream.pipe(res);
-    stream.on('finish', () => fs.unlink(actual, () => {}));
+    stream.on('end', () => fs.unlink(actual, () => {}));
     stream.on('error', () => { if (fs.existsSync(actual)) fs.unlinkSync(actual); res.status(500).end(); });
   });
 });
