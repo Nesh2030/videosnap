@@ -18,9 +18,11 @@
       --text: #f0f0f8;
       --muted: #6b6b85;
       --green: #22d68a;
+      --purple: #a855f7;
       --tiktok: #ff0050;
       --youtube: #ff0000;
       --facebook: #1877f2;
+      --instagram: #e1306c;
     }
 
     body {
@@ -34,7 +36,6 @@
       overflow-x: hidden;
     }
 
-    /* Background grid + glow */
     body::before {
       content: '';
       position: fixed;
@@ -59,7 +60,6 @@
       z-index: 0;
     }
 
-    /* NAV */
     nav {
       position: relative;
       z-index: 10;
@@ -91,7 +91,6 @@
       border-radius: 20px;
     }
 
-    /* HERO */
     .hero {
       position: relative;
       z-index: 10;
@@ -135,11 +134,11 @@
       margin-bottom: 40px;
     }
 
-    /* PLATFORM BADGES */
     .platforms {
       display: flex;
       justify-content: center;
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
       margin-bottom: 50px;
     }
 
@@ -153,18 +152,18 @@
       font-weight: 600;
       border: 1px solid var(--border);
       background: var(--surface);
-      transition: all 0.2s;
     }
 
     .platform-badge.tiktok { border-color: rgba(255,0,80,0.3); }
     .platform-badge.youtube { border-color: rgba(255,0,0,0.3); }
     .platform-badge.facebook { border-color: rgba(24,119,242,0.3); }
+    .platform-badge.instagram { border-color: rgba(225,48,108,0.3); }
     .platform-badge .dot { width: 8px; height: 8px; border-radius: 50%; }
     .platform-badge.tiktok .dot { background: var(--tiktok); }
     .platform-badge.youtube .dot { background: var(--youtube); }
     .platform-badge.facebook .dot { background: var(--facebook); }
+    .platform-badge.instagram .dot { background: var(--instagram); }
 
-    /* MAIN CARD */
     .card {
       position: relative;
       z-index: 10;
@@ -212,13 +211,8 @@
       transition: border-color 0.2s;
     }
 
-    .url-input-wrap input:focus {
-      border-color: var(--accent);
-    }
-
-    .url-input-wrap input::placeholder {
-      color: var(--muted);
-    }
+    .url-input-wrap input:focus { border-color: var(--accent); }
+    .url-input-wrap input::placeholder { color: var(--muted); }
 
     .clear-btn {
       position: absolute;
@@ -234,7 +228,6 @@
     }
     .clear-btn:hover { color: var(--text); }
 
-    /* Platform indicator inside input */
     .platform-indicator {
       display: none;
       align-items: center;
@@ -247,7 +240,6 @@
     .platform-indicator .pi-dot { width: 7px; height: 7px; border-radius: 50%; }
     .platform-indicator.show { display: flex; }
 
-    /* Quality selector */
     .quality-row {
       display: flex;
       gap: 10px;
@@ -291,7 +283,6 @@
       color: var(--accent);
     }
 
-    /* Fetch info button */
     .fetch-btn {
       width: 100%;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -305,15 +296,12 @@
       cursor: pointer;
       letter-spacing: 0.5px;
       transition: opacity 0.2s, transform 0.1s;
-      position: relative;
-      overflow: hidden;
     }
 
     .fetch-btn:hover { opacity: 0.92; }
     .fetch-btn:active { transform: scale(0.99); }
     .fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Spinner */
     .spinner {
       display: inline-block;
       width: 16px; height: 16px;
@@ -326,7 +314,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Video preview */
     #preview {
       display: none;
       margin-top: 28px;
@@ -389,12 +376,17 @@
       margin-bottom: 14px;
     }
 
+    /* Download buttons row */
+    .download-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .download-btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: var(--green);
-      color: #000;
       border: none;
       border-radius: 8px;
       font-family: 'DM Sans', sans-serif;
@@ -405,11 +397,21 @@
       transition: opacity 0.2s, transform 0.1s;
       letter-spacing: 0.3px;
     }
+
+    .download-btn.mp4 {
+      background: var(--green);
+      color: #000;
+    }
+
+    .download-btn.mp3 {
+      background: var(--purple);
+      color: #fff;
+    }
+
     .download-btn:hover { opacity: 0.88; }
     .download-btn:active { transform: scale(0.98); }
     .download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Progress bar */
     #progress-wrap {
       display: none;
       margin-top: 16px;
@@ -442,7 +444,6 @@
       50% { opacity: 0.7; }
     }
 
-    /* Error/success messages */
     .msg {
       margin-top: 16px;
       padding: 12px 16px;
@@ -463,7 +464,6 @@
       color: var(--green);
     }
 
-    /* HOW IT WORKS */
     .how {
       position: relative;
       z-index: 10;
@@ -510,19 +510,9 @@
       margin-bottom: 10px;
     }
 
-    .step h3 {
-      font-size: 0.88rem;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
+    .step h3 { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
+    .step p { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
 
-    .step p {
-      font-size: 0.78rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    /* Footer */
     footer {
       position: relative;
       z-index: 10;
@@ -543,6 +533,8 @@
       .preview-inner { flex-direction: column; }
       .thumb-wrap { width: 100%; height: 160px; }
       h1 { font-size: 3rem; }
+      .download-btns { flex-direction: column; }
+      .download-btn { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -557,12 +549,13 @@
   <section class="hero">
     <div class="hero-eyebrow"><span></span> Free Video Downloader <span></span></div>
     <h1>Download <em>Any</em> Video Clean</h1>
-    <p>Paste a link from TikTok, YouTube, or Facebook.<br/>Get your video — no watermarks, no sign-up, no nonsense.</p>
+    <p>Paste a link from TikTok, YouTube, Facebook or Instagram.<br/>Get your video — no watermarks, no sign-up, no nonsense.</p>
 
     <div class="platforms">
       <div class="platform-badge tiktok"><div class="dot"></div> TikTok</div>
       <div class="platform-badge youtube"><div class="dot"></div> YouTube</div>
       <div class="platform-badge facebook"><div class="dot"></div> Facebook</div>
+      <div class="platform-badge instagram"><div class="dot"></div> Instagram</div>
     </div>
   </section>
 
@@ -583,10 +576,10 @@
       <label>Quality</label>
       <div class="quality-options">
         <button class="q-btn active" data-q="best">Best</button>
-<button class="q-btn" data-q="1080">1080p</button>
-<button class="q-btn" data-q="720">720p</button>
-<button class="q-btn" data-q="480">480p</button>
-<button class="q-btn" data-q="360">360p</button>
+        <button class="q-btn" data-q="1080">1080p</button>
+        <button class="q-btn" data-q="720">720p</button>
+        <button class="q-btn" data-q="480">480p</button>
+        <button class="q-btn" data-q="360">360p</button>
       </div>
     </div>
 
@@ -602,10 +595,16 @@
         <div class="video-meta">
           <div class="video-title" id="videoTitle">—</div>
           <div class="video-sub" id="videoSub">—</div>
-          <button class="download-btn" id="downloadBtn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-7 2v2h14v-2H5z"/></svg>
-            Download MP4
-          </button>
+          <div class="download-btns">
+            <button class="download-btn mp4" id="downloadMp4Btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-7 2v2h14v-2H5z"/></svg>
+              Download MP4
+            </button>
+            <button class="download-btn mp3" id="downloadMp3Btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+              Download MP3
+            </button>
+          </div>
         </div>
       </div>
       <div id="progress-wrap">
@@ -622,7 +621,7 @@
       <div class="step">
         <div class="step-num">01</div>
         <h3>Copy the Link</h3>
-        <p>Share or copy the video URL from TikTok, YouTube, or Facebook.</p>
+        <p>Share or copy the video URL from TikTok, YouTube, Facebook or Instagram.</p>
       </div>
       <div class="step">
         <div class="step-num">02</div>
@@ -632,7 +631,7 @@
       <div class="step">
         <div class="step-num">03</div>
         <h3>Download Free</h3>
-        <p>Click Download and get your clean MP4 — no watermark, no account.</p>
+        <p>Click MP4 for video or MP3 for audio — no watermark, no account needed.</p>
       </div>
     </div>
   </div>
@@ -646,7 +645,8 @@
     const urlInput = document.getElementById('urlInput');
     const clearBtn = document.getElementById('clearBtn');
     const fetchBtn = document.getElementById('fetchBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadMp4Btn = document.getElementById('downloadMp4Btn');
+    const downloadMp3Btn = document.getElementById('downloadMp3Btn');
     const preview = document.getElementById('preview');
     const errorMsg = document.getElementById('errorMsg');
     const successMsg = document.getElementById('successMsg');
@@ -672,6 +672,7 @@
       if (/tiktok\.com/i.test(url)) return { name: 'TikTok', color: '#ff0050' };
       if (/youtube\.com|youtu\.be/i.test(url)) return { name: 'YouTube', color: '#ff0000' };
       if (/facebook\.com|fb\.watch/i.test(url)) return { name: 'Facebook', color: '#1877f2' };
+      if (/instagram\.com/i.test(url)) return { name: 'Instagram', color: '#e1306c' };
       return null;
     }
 
@@ -748,23 +749,33 @@
       }
     });
 
-    downloadBtn.addEventListener('click', async () => {
+    async function startDownload(format) {
       if (!currentUrl) return;
       hideMsg();
-      setLoading(downloadBtn, true, 'Preparing…');
+      const btn = format === 'mp3' ? downloadMp3Btn : downloadMp4Btn;
+      const otherBtn = format === 'mp3' ? downloadMp4Btn : downloadMp3Btn;
+      const label = format === 'mp3' ? 'Download MP3' : 'Download MP4';
+      const icon = format === 'mp3'
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-7 2v2h14v-2H5z"/></svg>';
+
+      setLoading(btn, true, 'Preparing…');
+      otherBtn.disabled = true;
       progressWrap.style.display = 'block';
       progressBar.style.width = '0%';
+
       let fake = 0;
       const interval = setInterval(() => {
         fake = Math.min(fake + Math.random() * 8, 88);
         progressBar.style.width = fake + '%';
-        progressLabel.textContent = fake < 30 ? 'Fetching video…' : fake < 70 ? 'Downloading…' : 'Finalizing…';
+        progressLabel.textContent = fake < 30 ? 'Fetching…' : fake < 70 ? 'Downloading…' : 'Finalizing…';
       }, 400);
+
       try {
         const res = await fetch('/api/download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: currentUrl, quality: selectedQuality })
+          body: JSON.stringify({ url: currentUrl, quality: selectedQuality, format })
         });
         clearInterval(interval);
         if (!res.ok) {
@@ -778,7 +789,7 @@
         const blob = await res.blob();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'videosnap_download.mp4';
+        a.download = format === 'mp3' ? 'videosnap.mp3' : 'videosnap.mp4';
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -792,9 +803,13 @@
         progressWrap.style.display = 'none';
         showError('Network error. Please try again.');
       } finally {
-        setLoading(downloadBtn, false, '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-7 2v2h14v-2H5z"/></svg> Download MP4');
+        setLoading(btn, false, `${icon} ${label}`);
+        otherBtn.disabled = false;
       }
-    });
+    }
+
+    downloadMp4Btn.addEventListener('click', () => startDownload('mp4'));
+    downloadMp3Btn.addEventListener('click', () => startDownload('mp3'));
 
     function formatDuration(secs) {
       if (!secs) return '';
@@ -809,6 +824,3 @@
   </script>
 </body>
 </html>
-        const dur = data.duration ? formatDuration(data.duration) : '';
-        document.getElementById('videoSub').textContent =
-          [data.uploader, data.platform?.toUpperCase(), dur].filter(Boolean).
