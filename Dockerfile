@@ -19,3 +19,4 @@ COPY . .
 EXPOSE 3000
 
 CMD ["npm", "start"]
+COPY cookies.txt /app/cookies.txt
