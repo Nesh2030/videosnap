@@ -6,10 +6,29 @@ const fs = require('fs');
 const os = require('os');
 const rateLimit = require('express-rate-limit');
 const https = require('https');
+const http = require('http');
 
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
+
+// ─── POT server readiness check ───────────────────────────────────────────────
+async function waitForPotServer(retries = 15) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await new Promise((resolve, reject) => {
+        http.get('http://127.0.0.1:4416/ping', (res) => {
+          res.statusCode === 200 ? resolve() : reject();
+        }).on('error', reject);
+      });
+      console.log('POT server ready.');
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  console.warn('POT server did not start in time — YouTube downloads may fail.');
+}
 
 // ─── yt-dlp setup ─────────────────────────────────────────────────────────────
 function getYtDlpPath() {
@@ -23,6 +42,9 @@ const YTDLP = getYtDlpPath();
 console.log(`yt-dlp: ${YTDLP}`);
 try { execSync(`${YTDLP} -U`, { stdio: 'ignore', timeout: 30000 }); console.log('yt-dlp updated.'); }
 catch { console.log('yt-dlp update skipped.'); }
+
+// ─── POT extractor args ───────────────────────────────────────────────────────
+const POT_ARGS = '--extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"';
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 const infoLimiter = rateLimit({ windowMs: 60*1000, max: 20, message: { error: 'Too many requests.' } });
@@ -194,9 +216,8 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
     if (!videoId) return res.status(400).json({ error: 'Could not read YouTube video ID.' });
 
     if (isAudio) {
-      // Audio: use yt-dlp with tv_embedded (less restricted for audio)
       const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
-      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
+      const ytArgs = `--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates ${POT_ARGS}`;
       const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
       exec(cmd, { timeout: 180000 }, (err) => {
         if (err) return res.status(500).json({ error: 'Audio download failed. Try MP4 instead.' });
@@ -209,11 +230,8 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
         fs.createReadStream(actual).pipe(res).on('finish', () => fs.unlink(actual, () => {}));
       });
     } else {
-      // Video: use yt-dlp with cookies.txt
       const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp4`);
-      const cookiesPath = path.join(__dirname, 'cookies.txt');
-      const cookiesArg = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
-      const ytArgs = `--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates ${cookiesArg}`;
+      const ytArgs = `--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates ${POT_ARGS}`;
       let fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
       if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
       if (quality === '720')  fmt = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
@@ -285,4 +303,7 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
   });
 });
 
-app.listen(PORT, () => console.log(`VideoSnap on port ${PORT} | yt-dlp: ${YTDLP} | static: ${publicDir}`));
+// ─── Start ────────────────────────────────────────────────────────────────────
+waitForPotServer().then(() => {
+  app.listen(PORT, () => console.log(`VideoSnap on port ${PORT} | yt-dlp: ${YTDLP} | static: ${publicDir}`));
+});
