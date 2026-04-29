@@ -96,7 +96,8 @@ app.post('/api/info', infoLimiter, (req, res) => {
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: 'Unsupported platform. Supported: TikTok, YouTube, Facebook, Instagram.' });
 
-  const cmd = `${YTDLP} --dump-json --no-playlist --no-warnings --socket-timeout 15 "${url}"`;
+  const ytArgs = platform === 'youtube' ? '--extractor-args "youtube:player_client=android,ios"' : '';
+  const cmd = `${YTDLP} --dump-json --no-playlist --no-warnings --socket-timeout 15 ${ytArgs} "${url}"`;
   console.log('Info:', cmd);
 
   exec(cmd, { timeout: 45000 }, (err, stdout, stderr) => {
@@ -135,10 +136,11 @@ app.post('/api/download', downloadLimiter, (req, res) => {
   const isAudio = format === 'mp3';
   const ext = isAudio ? 'mp3' : 'mp4';
   const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.${ext}`);
+  const ytArgs = platform === 'youtube' ? '--extractor-args "youtube:player_client=android,ios"' : '';
 
   let cmd;
   if (isAudio) {
-    cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
+    cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
   } else {
     const isCombinedOnly = platform === 'facebook' || platform === 'tiktok' || platform === 'instagram';
     let fmt;
@@ -155,7 +157,7 @@ app.post('/api/download', downloadLimiter, (req, res) => {
       if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
       if (quality === '240')  fmt = 'bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240][ext=mp4]/best[height<=240]';
     }
-    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
+    cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
   }
 
   console.log('Download:', cmd);
