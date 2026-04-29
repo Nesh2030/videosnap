@@ -95,7 +95,7 @@ function httpsGet(url, timeoutMs = 10000) {
   });
 }
 
-// ─── YouTube info via oEmbed (always free, no bot check) ─────────────────────
+// ─── YouTube info via oEmbed ──────────────────────────────────────────────────
 async function getYouTubeInfo(videoId) {
   const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
   const raw = await httpsGet(oEmbedUrl);
@@ -106,35 +106,6 @@ async function getYouTubeInfo(videoId) {
     uploader: data.author_name || null,
     duration: null,
   };
-}
-
-// ─── YouTube stream via Invidious (multiple fallbacks) ────────────────────────
-const INVIDIOUS = [
-  'https://inv.nadeko.net',
-  'https://invidious.privacyredirect.com',
-  'https://iv.datura.network',
-  'https://invidious.lunar.icu',
-  'https://invidious.nerdvpn.de',
-  'https://vid.puffyan.us',
-];
-
-async function getInvidiousStream(videoId, quality) {
-  for (const base of INVIDIOUS) {
-    try {
-      const raw = await httpsGet(`${base}/api/v1/videos/${videoId}`, 8000);
-      const json = JSON.parse(raw);
-      if (json.error || !json.formatStreams?.length) continue;
-
-      const streams = json.formatStreams;
-      let picked = null;
-      if (quality && quality !== 'best') {
-        picked = streams.find(s => s.qualityLabel?.startsWith(quality));
-      }
-      if (!picked) picked = streams[0];
-      if (picked?.url) return picked.url;
-    } catch { continue; }
-  }
-  throw new Error('No Invidious instance available');
 }
 
 // ─── /api/info ────────────────────────────────────────────────────────────────
@@ -188,16 +159,16 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
   if (!platform) return res.status(400).json({ error: 'Unsupported platform.' });
 
   const isAudio = format === 'mp3';
+  const COOKIES = fs.existsSync('/app/cookies.txt') ? '--cookies /app/cookies.txt' : '';
 
   if (platform === 'youtube') {
     const videoId = getVideoId(url);
     if (!videoId) return res.status(400).json({ error: 'Could not read YouTube video ID.' });
 
     if (isAudio) {
-      // Audio: use yt-dlp with tv_embedded (less restricted for audio)
       const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
-      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios;po_token=tv_embedded+jJ5nYqBjGMR7RHHNLjAIHn5xEuAGbv9Zy1mVXqDMz8Y=" --no-check-certificates --add-header "User-Agent:Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile Safari/537.36"';
-      const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
+      const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${COOKIES} ${ytArgs} -o "${tmpFile}" "${url}"`;
       exec(cmd, { timeout: 180000 }, (err) => {
         if (err) return res.status(500).json({ error: 'Audio download failed. Try MP4 instead.' });
         const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
@@ -209,7 +180,6 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
         fs.createReadStream(actual).pipe(res).on('finish', () => fs.unlink(actual, () => {}));
       });
     } else {
-      // Video: use yt-dlp with multiple client fallbacks
       const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp4`);
       let fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
       if (quality === '1080') fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
@@ -217,7 +187,7 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
       if (quality === '480')  fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]';
       if (quality === '360')  fmt = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
       const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
-      const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+      const cmd = `${YTDLP} -f "${fmt}" --merge-output-format mp4 --no-playlist --concurrent-fragments 4 --no-warnings --socket-timeout 30 ${COOKIES} ${ytArgs} -o "${tmpFile}" "${url}"`;
       exec(cmd, { timeout: 180000 }, (err) => {
         if (err) {
           if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
