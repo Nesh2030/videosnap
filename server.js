@@ -166,12 +166,15 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
     if (!videoId) return res.status(400).json({ error: 'Could not read YouTube video ID.' });
 
     if (isAudio) {
-      const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
+      const tmpBase = path.join(os.tmpdir(), `vs_${Date.now()}`);
       const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
-      const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${COOKIES} ${ytArgs} -o "${tmpFile}" "${url}"`;
+      const cmd = `${YTDLP} -f bestaudio/best --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${COOKIES} ${ytArgs} -o "${tmpBase}.%(ext)s" "${url}"`;
       exec(cmd, { timeout: 180000 }, (err) => {
         if (err) return res.status(500).json({ error: 'Audio download failed. Try MP4 instead.' });
-        const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
+        const actual = fs.existsSync(`${tmpBase}.mp3`) ? `${tmpBase}.mp3`
+          : fs.existsSync(`${tmpBase}.m4a`) ? `${tmpBase}.m4a`
+          : fs.existsSync(`${tmpBase}.webm`) ? `${tmpBase}.webm`
+          : null;
         if (!actual) return res.status(500).json({ error: 'File not found after download.' });
         const stat = fs.statSync(actual);
         res.setHeader('Content-Type', 'audio/mpeg');
@@ -213,7 +216,7 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
   const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.${ext}`);
   let cmd;
   if (isAudio) {
-    cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
+    cmd = `${YTDLP} -f bestaudio/best --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
   } else {
     const isCombined = platform === 'facebook' || platform === 'tiktok' || platform === 'instagram';
     let fmt;
