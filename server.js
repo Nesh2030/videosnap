@@ -96,7 +96,7 @@ app.post('/api/info', infoLimiter, (req, res) => {
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: 'Unsupported platform. Supported: TikTok, YouTube, Facebook, Instagram.' });
 
-  const ytArgs = platform === 'youtube' ? '--extractor-args "youtube:player_client=android,ios"' : '';
+  const ytArgs = platform === 'youtube' ? '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates' : '';
   const cmd = `${YTDLP} --dump-json --no-playlist --no-warnings --socket-timeout 15 ${ytArgs} "${url}"`;
   console.log('Info:', cmd);
 
@@ -136,7 +136,7 @@ app.post('/api/download', downloadLimiter, (req, res) => {
   const isAudio = format === 'mp3';
   const ext = isAudio ? 'mp3' : 'mp4';
   const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.${ext}`);
-  const ytArgs = platform === 'youtube' ? '--extractor-args "youtube:player_client=android,ios"' : '';
+  const ytArgs = platform === 'youtube' ? '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates' : '';
 
   let cmd;
   if (isAudio) {
