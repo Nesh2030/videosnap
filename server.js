@@ -196,7 +196,7 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
     if (isAudio) {
       // Audio: use yt-dlp with tv_embedded (less restricted for audio)
       const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
-      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
+      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios;po_token=tv_embedded+jJ5nYqBjGMR7RHHNLjAIHn5xEuAGbv9Zy1mVXqDMz8Y=" --no-check-certificates --add-header "User-Agent:Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile Safari/537.36"';
       const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
       exec(cmd, { timeout: 180000 }, (err) => {
         if (err) return res.status(500).json({ error: 'Audio download failed. Try MP4 instead.' });
