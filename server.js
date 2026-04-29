@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 const https = require('https');
 
 const app = express();
-app.set('trust proxy', 1); // Required for Railway
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // ─── yt-dlp setup ─────────────────────────────────────────────────────────────
@@ -21,11 +21,8 @@ function getYtDlpPath() {
 }
 const YTDLP = getYtDlpPath();
 console.log(`yt-dlp: ${YTDLP}`);
-
-try {
-  execSync(`${YTDLP} -U`, { stdio: 'ignore', timeout: 30000 });
-  console.log('yt-dlp updated.');
-} catch { console.log('yt-dlp update skipped.'); }
+try { execSync(`${YTDLP} -U`, { stdio: 'ignore', timeout: 30000 }); console.log('yt-dlp updated.'); }
+catch { console.log('yt-dlp update skipped.'); }
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 const infoLimiter = rateLimit({ windowMs: 60*1000, max: 20, message: { error: 'Too many requests.' } });
@@ -49,27 +46,21 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  try {
-    const version = execSync(`${YTDLP} --version`).toString().trim();
-    res.json({ status: 'ok', ytdlp: version });
-  } catch (e) { res.json({ status: 'error', error: e.message }); }
+  try { res.json({ status: 'ok', ytdlp: execSync(`${YTDLP} --version`).toString().trim() }); }
+  catch (e) { res.json({ status: 'error', error: e.message }); }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function validateUrl(url) {
-  try {
-    const p = new URL(url);
-    return ['http:', 'https:'].includes(p.protocol);
-  } catch { return false; }
+  try { const p = new URL(url); return ['http:', 'https:'].includes(p.protocol); }
+  catch { return false; }
 }
 
 function cleanUrl(url) {
   try {
     const p = new URL(url);
     if (/youtube\.com|youtu\.be/i.test(p.hostname)) {
-      p.searchParams.delete('list');
-      p.searchParams.delete('index');
-      p.searchParams.delete('start_radio');
+      ['list','index','start_radio','si'].forEach(k => p.searchParams.delete(k));
     }
     return p.toString();
   } catch { return url; }
@@ -83,13 +74,6 @@ function detectPlatform(url) {
   return null;
 }
 
-// ─── YouTube via Invidious API (bypasses bot detection) ───────────────────────
-const INVIDIOUS_INSTANCES = [
-  'https://inv.nadeko.net',
-  'https://invidious.privacyredirect.com',
-  'https://yt.cdaut.de',
-];
-
 function getVideoId(url) {
   try {
     const p = new URL(url);
@@ -98,59 +82,59 @@ function getVideoId(url) {
   } catch { return null; }
 }
 
-function fetchInvidiousInfo(videoId) {
+// ─── Generic HTTPS GET helper ─────────────────────────────────────────────────
+function httpsGet(url, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
-    let tried = 0;
-    function tryNext() {
-      if (tried >= INVIDIOUS_INSTANCES.length) return reject(new Error('All instances failed'));
-      const base = INVIDIOUS_INSTANCES[tried++];
-      const apiUrl = `${base}/api/v1/videos/${videoId}`;
-      https.get(apiUrl, { timeout: 10000 }, (res) => {
-        let data = '';
-        res.on('data', d => data += d);
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            if (json.error) return tryNext();
-            resolve(json);
-          } catch { tryNext(); }
-        });
-      }).on('error', () => tryNext()).on('timeout', () => tryNext());
-    }
-    tryNext();
+    const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => resolve(data));
+    });
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', reject);
   });
 }
 
-function fetchInvidiousStream(videoId, qualityLabel) {
-  return new Promise((resolve, reject) => {
-    let tried = 0;
-    function tryNext() {
-      if (tried >= INVIDIOUS_INSTANCES.length) return reject(new Error('All instances failed'));
-      const base = INVIDIOUS_INSTANCES[tried++];
-      const apiUrl = `${base}/api/v1/videos/${videoId}`;
-      https.get(apiUrl, { timeout: 10000 }, (res) => {
-        let data = '';
-        res.on('data', d => data += d);
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            if (json.error || !json.formatStreams) return tryNext();
+// ─── YouTube info via oEmbed (always free, no bot check) ─────────────────────
+async function getYouTubeInfo(videoId) {
+  const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+  const raw = await httpsGet(oEmbedUrl);
+  const data = JSON.parse(raw);
+  return {
+    title: data.title || 'Video',
+    thumbnail: data.thumbnail_url || null,
+    uploader: data.author_name || null,
+    duration: null,
+  };
+}
 
-            // Pick best combined stream matching quality
-            let streams = json.formatStreams || [];
-            let stream = null;
-            if (qualityLabel && qualityLabel !== 'best') {
-              stream = streams.find(s => s.qualityLabel && s.qualityLabel.startsWith(qualityLabel));
-            }
-            if (!stream) stream = streams[0]; // best available
-            if (!stream) return tryNext();
-            resolve({ url: stream.url, instance: base });
-          } catch { tryNext(); }
-        });
-      }).on('error', () => tryNext()).on('timeout', () => tryNext());
-    }
-    tryNext();
-  });
+// ─── YouTube stream via Invidious (multiple fallbacks) ────────────────────────
+const INVIDIOUS = [
+  'https://inv.nadeko.net',
+  'https://invidious.privacyredirect.com',
+  'https://iv.datura.network',
+  'https://invidious.lunar.icu',
+  'https://invidious.nerdvpn.de',
+  'https://vid.puffyan.us',
+];
+
+async function getInvidiousStream(videoId, quality) {
+  for (const base of INVIDIOUS) {
+    try {
+      const raw = await httpsGet(`${base}/api/v1/videos/${videoId}`, 8000);
+      const json = JSON.parse(raw);
+      if (json.error || !json.formatStreams?.length) continue;
+
+      const streams = json.formatStreams;
+      let picked = null;
+      if (quality && quality !== 'best') {
+        picked = streams.find(s => s.qualityLabel?.startsWith(quality));
+      }
+      if (!picked) picked = streams[0];
+      if (picked?.url) return picked.url;
+    } catch { continue; }
+  }
+  throw new Error('No Invidious instance available');
 }
 
 // ─── /api/info ────────────────────────────────────────────────────────────────
@@ -162,32 +146,24 @@ app.post('/api/info', infoLimiter, async (req, res) => {
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: 'Unsupported platform. Supported: TikTok, YouTube, Facebook, Instagram.' });
 
-  // YouTube: use Invidious API to bypass bot detection
   if (platform === 'youtube') {
     const videoId = getVideoId(url);
-    if (!videoId) return res.status(400).json({ error: 'Could not extract YouTube video ID.' });
+    if (!videoId) return res.status(400).json({ error: 'Could not read YouTube video ID.' });
     try {
-      const info = await fetchInvidiousInfo(videoId);
-      return res.json({
-        title: info.title || 'Video',
-        thumbnail: info.videoThumbnails?.[0]?.url || null,
-        duration: info.lengthSeconds || null,
-        platform,
-        uploader: info.author || null,
-        filesize: null,
-      });
+      const info = await getYouTubeInfo(videoId);
+      return res.json({ ...info, platform });
     } catch (e) {
-      return res.status(500).json({ error: 'Could not fetch YouTube info. The video may be unavailable.' });
+      return res.status(500).json({ error: 'Could not fetch YouTube info. The video may be unavailable or private.' });
     }
   }
 
-  // Other platforms: use yt-dlp
+  // Other platforms
   const cmd = `${YTDLP} --dump-json --no-playlist --no-warnings --socket-timeout 15 "${url}"`;
   exec(cmd, { timeout: 45000 }, (err, stdout, stderr) => {
     if (err) {
       if (/private/i.test(stderr)) return res.status(500).json({ error: 'This video is private.' });
       if (/unavailable|removed/i.test(stderr)) return res.status(500).json({ error: 'This video has been removed.' });
-      return res.status(500).json({ error: 'Could not fetch video info. The link may be invalid.' });
+      return res.status(500).json({ error: 'Could not fetch video info.' });
     }
     try {
       const info = JSON.parse(stdout.trim().split('\n')[0]);
@@ -197,9 +173,8 @@ app.post('/api/info', infoLimiter, async (req, res) => {
         duration: info.duration || null,
         platform,
         uploader: info.uploader || info.channel || null,
-        filesize: info.filesize || info.filesize_approx || null,
       });
-    } catch { res.status(500).json({ error: 'Failed to read video info.' }); }
+    } catch { res.status(500).json({ error: 'Failed to parse video info.' }); }
   });
 });
 
@@ -214,59 +189,52 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
 
   const isAudio = format === 'mp3';
 
-  // YouTube: stream directly from Invidious
   if (platform === 'youtube') {
     const videoId = getVideoId(url);
-    if (!videoId) return res.status(400).json({ error: 'Could not extract YouTube video ID.' });
-    try {
-      if (isAudio) {
-        // For MP3, fall back to yt-dlp with audio only (less bot detection issues)
-        const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
-        const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
-        const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
-        exec(cmd, { timeout: 180000 }, (err) => {
-          if (err) return res.status(500).json({ error: 'Audio download failed.' });
-          const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
-          if (!actual) return res.status(500).json({ error: 'File not found after download.' });
-          const stat = fs.statSync(actual);
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.setHeader('Content-Disposition', 'attachment; filename="videosnap.mp3"');
-          res.setHeader('Content-Length', stat.size);
-          const stream = fs.createReadStream(actual);
-          stream.pipe(res);
-          stream.on('end', () => fs.unlink(actual, () => {}));
-          stream.on('error', () => res.status(500).end());
-        });
-      } else {
-        const { url: streamUrl } = await fetchInvidiousStream(videoId, quality);
-        // Proxy the stream to the client
+    if (!videoId) return res.status(400).json({ error: 'Could not read YouTube video ID.' });
+
+    if (isAudio) {
+      // Audio: use yt-dlp with tv_embedded (less restricted for audio)
+      const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.mp3`);
+      const ytArgs = '--extractor-args "youtube:player_client=tv_embedded,android,ios" --no-check-certificates';
+      const cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 ${ytArgs} -o "${tmpFile}" "${url}"`;
+      exec(cmd, { timeout: 180000 }, (err) => {
+        if (err) return res.status(500).json({ error: 'Audio download failed. Try MP4 instead.' });
+        const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
+        if (!actual) return res.status(500).json({ error: 'File not found after download.' });
+        const stat = fs.statSync(actual);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Disposition', 'attachment; filename="videosnap.mp3"');
+        res.setHeader('Content-Length', stat.size);
+        fs.createReadStream(actual).pipe(res).on('finish', () => fs.unlink(actual, () => {}));
+      });
+    } else {
+      // Video: proxy stream from Invidious
+      try {
+        const streamUrl = await getInvidiousStream(videoId, quality);
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Content-Disposition', 'attachment; filename="videosnap.mp4"');
-        https.get(streamUrl, { timeout: 60000 }, (streamRes) => {
-          if (streamRes.headers['content-length']) {
-            res.setHeader('Content-Length', streamRes.headers['content-length']);
-          }
+        https.get(streamUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 60000 }, (streamRes) => {
+          if (streamRes.headers['content-length']) res.setHeader('Content-Length', streamRes.headers['content-length']);
           streamRes.pipe(res);
-          streamRes.on('error', () => res.status(500).end());
-        }).on('error', () => res.status(500).json({ error: 'Stream failed. Try again.' }));
+        }).on('error', () => res.status(500).json({ error: 'Stream failed. Please try again.' }));
+      } catch (e) {
+        return res.status(500).json({ error: 'YouTube download unavailable right now. Try again in a moment.' });
       }
-    } catch (e) {
-      return res.status(500).json({ error: 'YouTube download failed. The video may be unavailable.' });
     }
     return;
   }
 
-  // Other platforms: use yt-dlp
+  // Other platforms: yt-dlp
   const ext = isAudio ? 'mp3' : 'mp4';
   const tmpFile = path.join(os.tmpdir(), `vs_${Date.now()}.${ext}`);
-
   let cmd;
   if (isAudio) {
     cmd = `${YTDLP} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 0 --no-warnings --socket-timeout 30 -o "${tmpFile}" "${url}"`;
   } else {
-    const isCombinedOnly = platform === 'facebook' || platform === 'tiktok' || platform === 'instagram';
+    const isCombined = platform === 'facebook' || platform === 'tiktok' || platform === 'instagram';
     let fmt;
-    if (isCombinedOnly) {
+    if (isCombined) {
       const h = ['1080','720','480','360','240'].includes(quality) ? quality : null;
       fmt = h ? `best[height<=${h}][ext=mp4]/best[height<=${h}]/best[ext=mp4]/best` : `best[ext=mp4]/best`;
     } else {
@@ -287,18 +255,16 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
       if (/unavailable|removed/i.test(stderr)) return res.status(500).json({ error: 'This video has been removed.' });
       return res.status(500).json({ error: 'Download failed. The video may be private or unavailable.' });
     }
-    const actualFile = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
-    if (!actualFile) return res.status(500).json({ error: 'File not found after download.' });
-    const stat = fs.statSync(actualFile);
-    const contentType = isAudio ? 'audio/mpeg' : 'video/mp4';
-    const filename = isAudio ? 'videosnap.mp3' : 'videosnap.mp4';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const actual = fs.existsSync(tmpFile) ? tmpFile : fs.existsSync(tmpFile + '.mp3') ? tmpFile + '.mp3' : null;
+    if (!actual) return res.status(500).json({ error: 'File not found after download.' });
+    const stat = fs.statSync(actual);
+    res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="${isAudio ? 'videosnap.mp3' : 'videosnap.mp4'}"`);
     res.setHeader('Content-Length', stat.size);
-    const stream = fs.createReadStream(actualFile);
+    const stream = fs.createReadStream(actual);
     stream.pipe(res);
-    stream.on('end', () => fs.unlink(actualFile, () => {}));
-    stream.on('error', () => { if (fs.existsSync(actualFile)) fs.unlinkSync(actualFile); res.status(500).end(); });
+    stream.on('end', () => fs.unlink(actual, () => {}));
+    stream.on('error', () => { if (fs.existsSync(actual)) fs.unlinkSync(actual); res.status(500).end(); });
   });
 });
 
